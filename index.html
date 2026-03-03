@@ -116,9 +116,7 @@
                 <header class="header">
                     <div class="header-left"><h2>Resources</h2><p>Team members and capacity</p></div>
                     <div class="header-actions">
-                        <button class="btn" onclick="downloadTemplate('resources')">Template</button>
-                        <label class="btn" style="cursor:pointer"><input type="file" accept=".csv" style="display:none" onchange="importResourcesCSV(this)">Import CSV</label>
-                        <button class="btn btn-primary" onclick="openResourceModal()">+ Add Resource</button>
+                        <button class="btn" onclick="exportResources()">Export CSV</button>
                     </div>
                 </header>
                 <div class="resources-grid" id="resourcesGrid"></div>
@@ -240,39 +238,24 @@
         </div>
     </div>
 
-    <!-- RESOURCE MODAL -->
+    <!-- RESOURCE MODAL (View/Edit only) -->
     <div class="modal-overlay" id="resourceModal">
         <div class="modal">
             <div class="modal-header">
-                <h3 class="modal-title" id="resModalTitle">New Resource</h3>
+                <h3 class="modal-title" id="resModalTitle">Edit Resource</h3>
                 <button class="modal-close" onclick="closeModal('resourceModal')">×</button>
             </div>
             <div class="modal-body">
                 <input type="hidden" id="editResId">
-                <div class="form-group">
-                    <label class="form-label">Role *</label>
-                    <select class="form-select" id="resRole" onchange="updateAutoId()">
-                        <option value="">-- Select Role --</option>
-                        <option value="Director of Change">Director of Change</option>
-                        <option value="Head of Change">Head of Change</option>
-                        <option value="Head of PMO">Head of PMO</option>
-                        <option value="Project Manager">Project Manager</option>
-                        <option value="Change Manager">Change Manager</option>
-                        <option value="Project Business Analyst">Project Business Analyst</option>
-                        <option value="Project Support Officer">Project Support Officer</option>
-                    </select>
-                </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">Auto-Generated ID</label>
-                        <div class="auto-id-display">
-                            <span class="auto-id-value" id="autoIdValue">--</span>
-                            <span class="auto-id-hint">Based on role</span>
-                        </div>
+                        <label class="form-label">Name</label>
+                        <input type="text" class="form-input" id="resName" readonly style="opacity:0.7">
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Name *</label>
-                        <input type="text" class="form-input" id="resName" placeholder="e.g. David Usifo">
+                        <label class="form-label">Role</label>
+                        <input type="text" class="form-input" id="resRoleDisplay" readonly style="opacity:0.7">
+                        <input type="hidden" id="resRole">
                     </div>
                 </div>
                 <div class="form-row">
