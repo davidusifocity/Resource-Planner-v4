@@ -14,6 +14,31 @@ let toastTimer = null;
 
 const sizeDefaults = { XS: 1, S: 3, M: 7, L: 15, XL: 30, XXL: 50 };
 
+// CSU Team - Hardcoded list (edit here to update team)
+const CSU_TEAM = [
+    { id: 'DC01', name: 'Natasha Benneth', role: 'Director of Change' },
+    { id: 'HC01', name: 'Mark Gillespie', role: 'Head of Change' },
+    { id: 'HP01', name: 'Tom Kelly', role: 'Head of PMO' },
+    { id: 'PGM01', name: 'Claudia Wegener', role: 'Programme Manager' },
+    { id: 'PM01', name: 'Helen Langley', role: 'Project Manager' },
+    { id: 'PM02', name: 'Beth Okona-Mensah', role: 'Project Manager' },
+    { id: 'PM03', name: 'Sandra Ashton', role: 'Project Manager' },
+    { id: 'PM04', name: 'Mark Pacey', role: 'Project Manager' },
+    { id: 'PM05', name: 'Natasha Okolo', role: 'Project Manager' },
+    { id: 'PM06', name: 'Greg Herzberg', role: 'Project Manager' },
+    { id: 'PBA01', name: 'Kate Mather', role: 'Project and Business Analyst' },
+    { id: 'PBA02', name: 'Gemma Bergomi', role: 'Project and Business Analyst' },
+    { id: 'PBA03', name: 'David Usifo', role: 'Project and Business Analyst' },
+    { id: 'PBA04', name: 'Pia Chaffey', role: 'Project and Business Analyst' },
+    { id: 'CM01', name: 'Kay Nicholls', role: 'Change Manager' },
+    { id: 'CM02', name: 'Faith Buck', role: 'Change Manager' },
+    { id: 'CM03', name: 'Holly Howe', role: 'Change Manager' },
+    { id: 'CM04', name: 'Adelah Bilal', role: 'Change Manager' },
+    { id: 'PSO01', name: 'Mariam Gujadze', role: 'Project Support Officer' },
+    { id: 'PSO02', name: 'Aisha Dosanjh', role: 'Project Support Officer' },
+    { id: 'PSO03', name: 'Raihan Ahmed', role: 'Project Support Officer' }
+];
+
 const avatarColors = [
     'linear-gradient(135deg,#1a7aab,#0d5a80)',
     'linear-gradient(135deg,#b32028,#801518)',
@@ -71,7 +96,18 @@ function load() {
         const d = JSON.parse(localStorage.getItem('csu_v5'));
         if (d) {
             workItems = validateWorkItems(d.workItems || []);
-            resources = validateResources(d.resources || []);
+            // Load saved resource settings (FTE, baseline) but use CSU_TEAM as source of truth
+            const savedResources = d.resources || [];
+            resources = CSU_TEAM.map(teamMember => {
+                const saved = savedResources.find(r => r.id === teamMember.id);
+                return {
+                    id: teamMember.id,
+                    name: teamMember.name,
+                    role: teamMember.role,
+                    totalFTE: saved ? (saved.totalFTE || 1) : 1,
+                    baselineCommitment: saved ? (saved.baselineCommitment ?? 0.2) : 0.2
+                };
+            });
             lastUpdated = d.lastUpdated;
             // Re-derive statuses on load based on current date
             workItems.forEach(w => {
@@ -79,11 +115,26 @@ function load() {
                     w.status = deriveStatus(w.startDate, w.duration);
                 }
             });
+        } else {
+            // First load - initialize with CSU_TEAM
+            resources = CSU_TEAM.map(teamMember => ({
+                id: teamMember.id,
+                name: teamMember.name,
+                role: teamMember.role,
+                totalFTE: 1,
+                baselineCommitment: 0.2
+            }));
         }
     } catch (e) {
         console.error('Failed to load data:', e);
         workItems = [];
-        resources = [];
+        resources = CSU_TEAM.map(teamMember => ({
+            id: teamMember.id,
+            name: teamMember.name,
+            role: teamMember.role,
+            totalFTE: 1,
+            baselineCommitment: 0.2
+        }));
     }
     updateLastUpdated();
 }
@@ -784,15 +835,18 @@ function renderHeatmap(tableId) {
 // ─── Resources ───────────────────────────────────────────
 function renderResources() {
     const g = document.getElementById('resourcesGrid');
-    if (!resources.length) { g.innerHTML = '<div class="empty-state" style="grid-column:1/-1">No resources added yet</div>'; return; }
+    if (!resources.length) { g.innerHTML = '<div class="empty-state" style="grid-column:1/-1">No resources configured</div>'; return; }
     g.innerHTML = resources.map((r, i) => {
         const w = calcResourceWeekPercent(r.id);
         const avg = Math.round(w.reduce((a, b) => a + b, 0) / w.length);
         const availDays = getResourceAvailableDays(r.id);
-        const assignedCount = workItems.filter(wi => (wi.assignedResources || []).includes(r.id) && wi.status !== 'complete').length;
+        const assignedCount = workItems.filter(wi => {
+            if (wi.status === 'complete') return false;
+            if (wi.assignments) return wi.assignments.some(a => a.resourceId === r.id);
+            return (wi.assignedResources || []).includes(r.id);
+        }).length;
         const peakWeek = Math.max(...w);
         return '<div class="resource-card" onclick="editResource(\'' + esc(r.id) + '\')">' +
-            '<button class="delete-btn" onclick="event.stopPropagation();deleteResource(\'' + esc(r.id) + '\')">×</button>' +
             '<div class="resource-header"><div class="resource-avatar" style="background:' + avatarColors[i % avatarColors.length] + '">' + getInitials(r.name) + '</div>' +
             '<div class="resource-info"><h3>' + esc(r.name) + '<span class="person-id">' + esc(r.id) + '</span></h3><p>' + esc(r.role || '') + '</p></div></div>' +
             '<div class="resource-stats"><div class="resource-stat"><div class="resource-stat-label">Available</div><div class="resource-stat-value">' + availDays + 'd/wk</div></div>' +
@@ -953,92 +1007,45 @@ function deleteWorkItem(id) {
 
 // ─── Resource CRUD ───────────────────────────────────────
 function openResourceModal(id) {
+    if (!id) return; // No creating new resources
+    const r = resources.find(x => x.id === id);
+    if (!r) return;
+    
     document.getElementById('resourceModal').classList.add('active');
-    if (id) {
-        const r = resources.find(x => x.id === id);
-        if (r) {
-            document.getElementById('resModalTitle').textContent = 'Edit Resource';
-            document.getElementById('editResId').value = r.id;
-            document.getElementById('resRole').value = r.role || '';
-            document.getElementById('autoIdValue').textContent = r.id;
-            document.getElementById('resName').value = r.name || '';
-            document.getElementById('resFTE').value = r.totalFTE ?? 1;
-            document.getElementById('resBaseline').value = r.baselineCommitment ?? 0;
-            document.getElementById('resRole').disabled = true;
-            return;
-        }
-    }
-    document.getElementById('resModalTitle').textContent = 'New Resource';
-    document.getElementById('editResId').value = '';
-    document.getElementById('resRole').value = '';
-    document.getElementById('resRole').disabled = false;
-    document.getElementById('autoIdValue').textContent = '--';
-    document.getElementById('resName').value = '';
-    document.getElementById('resFTE').value = '1.0';
-    document.getElementById('resBaseline').value = '0.2';
+    document.getElementById('resModalTitle').textContent = 'Edit Resource';
+    document.getElementById('editResId').value = r.id;
+    document.getElementById('resName').value = r.name || '';
+    document.getElementById('resRole').value = r.role || '';
+    document.getElementById('resRoleDisplay').value = r.role || '';
+    document.getElementById('resFTE').value = r.totalFTE ?? 1;
+    document.getElementById('resBaseline').value = r.baselineCommitment ?? 0.2;
 }
 
 function editResource(id) { openResourceModal(id); }
 
 function saveResource() {
     const existingId = document.getElementById('editResId').value;
-    const role = document.getElementById('resRole').value;
-    const name = document.getElementById('resName').value.trim();
-    if (!role) { toast('Role required', true); return; }
-    if (!name) { toast('Name required', true); return; }
-    let newId = existingId;
-    if (!existingId) { newId = generateResourceId(role); if (!newId) { toast('Invalid role', true); return; } }
-    const r = {
-        id: newId, name, role,
-        totalFTE: parseFloat(document.getElementById('resFTE').value) || 1,
-        baselineCommitment: parseFloat(document.getElementById('resBaseline').value) || 0
-    };
-    if (existingId) {
-        const idx = resources.findIndex(x => x.id === existingId);
-        if (idx >= 0) resources[idx] = r;
-    } else {
-        resources.push(r);
-    }
+    if (!existingId) return;
+    
+    const idx = resources.findIndex(x => x.id === existingId);
+    if (idx < 0) return;
+    
+    resources[idx].totalFTE = parseFloat(document.getElementById('resFTE').value) || 1;
+    resources[idx].baselineCommitment = parseFloat(document.getElementById('resBaseline').value) || 0.2;
+    
     save();
     closeModal('resourceModal');
     renderCurrentPage();
-    toast(existingId ? 'Updated' : 'Added');
+    toast('Updated');
 }
 
-function deleteResource(id) {
-    const r = resources.find(x => x.id === id);
-    if (!r) return;
-
-    // Find affected work items
-    const affected = workItems.filter(w => (w.assignedResources || []).includes(id));
-    const affectedDetails = affected.length > 0
-        ? 'This resource is assigned to ' + affected.length + ' work item(s): ' +
-        affected.slice(0, 3).map(w => '"' + w.title + '"').join(', ') +
-        (affected.length > 3 ? ' and ' + (affected.length - 3) + ' more' : '') +
-        '. They will be unassigned.'
-        : null;
-
-    showConfirm(
-        'Delete Resource',
-        'Are you sure you want to delete ' + r.name + ' (' + r.id + ')? This can be undone.',
-        affectedDetails,
-        function () {
-            // Save undo data including affected work items' original assignments
-            const undoData = {
-                resource: { ...r },
-                affectedItems: affected.map(w => ({ id: w.id, assignedResources: [...(w.assignedResources || [])] }))
-            };
-            pushUndo('deleteResource', undoData, 'delete ' + r.name);
-
-            resources = resources.filter(x => x.id !== id);
-            workItems.forEach(w => {
-                if (w.assignedResources) w.assignedResources = w.assignedResources.filter(x => x !== id);
-            });
-            save();
-            renderCurrentPage();
-            toast('Deleted ' + r.name, false, true);
-        }
-    );
+function exportResources() {
+    let csv = 'ID,Name,Role,TotalFTE,BaselineCommitment,AvailableDaysPerWeek\n';
+    resources.forEach(r => {
+        csv += [r.id, '"' + (r.name || '') + '"', '"' + (r.role || '') + '"', r.totalFTE || 1, r.baselineCommitment || 0, getResourceAvailableDays(r.id)].join(',') + '\n';
+    });
+    downloadBlob(csv, 'resources_export.csv');
+    toast('Exported');
 }
 
 // ─── CSV Parsing ─────────────────────────────────────────
@@ -1150,47 +1157,6 @@ function importWorkItemsCSV(input) {
 }
 
 // ─── CSV Import: Resources ───────────────────────────────
-function importResourcesCSV(input) {
-    const file = input.files[0];
-    if (!file) return;
-    input.value = '';
-
-    const reader = new FileReader();
-    reader.onload = function (e) {
-        try {
-            const { headers, rows } = parseCSV(e.target.result);
-            if (!headers.length) { toast('Empty CSV file', true); return; }
-
-            let imported = 0, skipped = 0;
-
-            rows.forEach(row => {
-                const name = getCSVField(row, headers, 'name');
-                const role = getCSVField(row, headers, 'role');
-
-                if (!name || !role) { skipped++; return; }
-                if (!validRoles.includes(role)) { skipped++; return; }
-
-                const id = generateResourceId(role);
-                if (!id) { skipped++; return; }
-
-                const totalFTE = Math.max(0.1, Math.min(1.0, parseFloat(getCSVField(row, headers, 'totalfte')) || 1));
-                const baselineCommitment = Math.max(0, Math.min(1.0, parseFloat(getCSVField(row, headers, 'baselinecommitment')) || 0));
-
-                resources.push({ id, name, role, totalFTE, baselineCommitment });
-                imported++;
-            });
-
-            save();
-            renderCurrentPage();
-            toast('Imported ' + imported + ' resources' + (skipped > 0 ? ', ' + skipped + ' skipped' : ''));
-        } catch (err) {
-            console.error('CSV import error:', err);
-            toast('Failed to parse CSV file', true);
-        }
-    };
-    reader.readAsText(file);
-}
-
 // ─── Export ──────────────────────────────────────────────
 function exportAllData() {
     let wi = 'ID,Title,PortfolioItem,Size,EffortDays,Duration,StartDate,FTE%,Status,AssignedResources\n';
