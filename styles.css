@@ -512,9 +512,25 @@ body {
     color-scheme: dark;
 }
 
+/* Date picker styling for dark theme */
+input[type="date"] {
+    color-scheme: dark;
+}
+
 input[type="date"]::-webkit-calendar-picker-indicator {
-    filter: invert(1);
+    filter: invert(1) brightness(2);
     cursor: pointer;
+    opacity: 0.8;
+    padding: 4px;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+}
+
+/* Firefox date picker */
+input[type="date"]::-moz-calendar-picker-indicator {
+    filter: invert(1);
 }
 
 .form-input:focus, .form-select:focus { outline: none; border-color: var(--brand-primary); }
