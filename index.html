@@ -175,12 +175,16 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label class="form-label">Start Date</label>
-                        <input type="date" class="form-input" id="wiStartDate" onchange="onDateChange()">
+                        <div class="date-input-wrapper">
+                            <input type="date" class="form-input" id="wiStartDate" onchange="onDateChange()">
+                        </div>
                         <div class="form-hint" id="startDateHint">Click to select from calendar</div>
                     </div>
                     <div class="form-group">
                         <label class="form-label">End Date</label>
-                        <input type="date" class="form-input" id="wiEndDate" onchange="onEndDateChange()">
+                        <div class="date-input-wrapper">
+                            <input type="date" class="form-input" id="wiEndDate" onchange="onEndDateChange()">
+                        </div>
                         <div class="form-hint" id="endDateHint">Click to select from calendar</div>
                     </div>
                 </div>
